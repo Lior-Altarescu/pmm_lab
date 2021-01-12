@@ -1,0 +1,4 @@
+[mysqld]
+innodb_monitor_enable=all
+performance_schema=ON
+

@@ -1,0 +1,104 @@
+version: '3.5'
+
+services:
+   pmm-data:
+        image: percona/pmm-server:2
+        container_name: pmm-data
+        hostname: pmm-data
+        volumes:
+            - /srv
+        entrypoint: /bin/true
+   pmm-server:
+     container_name: pmm-server
+     image: percona/pmm-server:2
+     restart: always
+     logging:
+       driver: json-file
+       options:
+           max-size: "10m"
+           max-file: "5"
+     ports:
+      - 443:443
+      - 80:80
+     volumes_from:
+      - pmm-data
+     networks:
+      - pmm_network
+     depends_on:
+     - pmm-data
+   mysql-57:
+     container_name: mysql-57
+     image: mysql:5.7
+     restart: always
+     environment:
+       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+     ports:
+      - 3306:3306
+     volumes:
+      - ./config/mysql5.7:/etc/mysql/conf.d
+     networks:
+      - pmm_network
+     depends_on:
+     - pmm-server
+   mysql-8:
+     container_name: mysql-8
+     image: mysql:8
+     restart: always
+     environment:
+       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+     ports:
+      - 3307:3306
+     volumes:
+      - ./config/mysql8:/etc/mysql/conf.d
+     networks:
+      - pmm_network
+     depends_on:
+     - pmm-server
+   pmm-client-data:
+        image: percona/pmm-client:2
+        container_name: pmm-client-data
+        hostname: pmm-client-data
+        volumes:
+            - /srv
+        entrypoint: /bin/true
+        networks:
+        - pmm_network  
+   pmm-client: 
+     container_name: pmm-client
+     image: percona/pmm-client:2
+     restart: always
+     environment:
+       PMM_AGENT_SERVER_ADDRESS: "${PMM_AGENT_SERVER_ADDRESS}"
+       PMM_AGENT_SERVER_USERNAME: "${PMM_AGENT_SERVER_USERNAME}"
+       PMM_AGENT_SERVER_PASSWORD: "${PMM_AGENT_SERVER_PASSWORD}"
+       PMM_AGENT_SERVER_INSECURE_TLS: "${PMM_AGENT_SERVER_INSECURE_TLS}"
+       PMM_AGENT_SETUP_CONTAINER_NAME: "${PMM_AGENT_SETUP_CONTAINER_NAME}"
+       PMM_AGENT_SETUP_REGION: "${PMM_AGENT_SETUP_REGION}"
+       PMM_AGENT_SETUP_AZ: "${PMM_AGENT_SETUP_AZ}"
+       PMM_AGENT_SETUP: "${PMM_AGENT_SETUP}"
+       PMM_AGENT_CONFIG_FILE: "${PMM_AGENT_CONFIG_FILE}"
+     networks:
+      - pmm_network
+     volumes_from:
+      - pmm-client-data
+     depends_on:
+      - pmm-client-data
+      - pmm-server
+   poststartup:
+    container_name: poststartup
+    image: mysql:5.7
+    networks:
+      - pmm_network
+    depends_on:
+      - pmm-client
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+      PMM_USER: "${PMM_USER}"
+      PMM_PASSWORD: "${PMM_PASSWORD}"
+    volumes:
+      - ./config/scripts:/scripts
+    command: bash /scripts/setup-pmm-client.sh
+networks:
+  pmm_network:
+    name: pmm_network
+    driver: bridge
